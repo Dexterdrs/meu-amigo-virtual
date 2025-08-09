@@ -12,28 +12,35 @@ export default function Home() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
 
-  async function send() {
-    const text = input.trim();
-    if (!text || loading) return;
-    setInput("");
-    const nextMsgs = [...msgs, { role: "user", content: text }];
-    setMsgs(nextMsgs);
-    setLoading(true);
-    try {
-      const r = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: nextMsgs })
-      });
-      const data = await r.json();
-      const answer = data?.content || "Desculpe, não consegui processar agora.";
-      setMsgs((prev) => [...prev, { role: "assistant", content: answer }]);
-    } catch (e) {
-      setMsgs((prev) => [...prev, { role: "assistant", content: "Erro ao falar com a IA." }]);
-    } finally {
-      setLoading(false);
+async function send() {
+  const text = input.trim();
+  if (!text || loading) return;
+  setInput("");
+  const nextMsgs = [...msgs, { role: "user", content: text }];
+  setMsgs(nextMsgs);
+  setLoading(true);
+  try {
+    const r = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ messages: nextMsgs })
+    });
+    const data = await r.json();
+
+    if (!r.ok) {
+      const err = typeof data?.error === "string" ? data.error : JSON.stringify(data);
+      setMsgs((prev) => [...prev, { role: "assistant", content: `⚠️ Erro do servidor: ${err}` }]);
+      return;
     }
+
+    const answer = data?.content || "Sem conteúdo.";
+    setMsgs((prev) => [...prev, { role: "assistant", content: answer }]);
+  } catch (e) {
+    setMsgs((prev) => [...prev, { role: "assistant", content: `Falha de rede: ${String(e)}` }]);
+  } finally {
+    setLoading(false);
   }
+}
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", background: "#f4f6f8", minHeight: "100vh" }}>

@@ -1,32 +1,24 @@
-// Garante Node 18+ na Vercel (fetch nativo)
-export const config = { runtime: "edge" };
-
-export default async function handler(req) {
+// pages/api/chat.js  (Node runtime)
+export default async function handler(req, res) {
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method Not Allowed" }), {
-      status: 405,
-      headers: { "Content-Type": "application/json" }
-    });
+    return res.status(405).json({ error: "Method Not Allowed" });
   }
 
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      return new Response(JSON.stringify({ error: "OPENAI_API_KEY not set" }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" }
-      });
+      return res.status(500).json({ error: "OPENAI_API_KEY not set" });
     }
 
-    const { messages = [] } = await req.json();
+    const { messages = [] } = req.body || {};
 
     const system = {
       role: "system",
       content:
-        'Você é o "Meu Amigo Virtual": empático, claro, prestativo. Responda em PT-BR.'
+        'Você é o "Meu Amigo Virtual": empático, claro e prestativo. Responda em PT-BR.'
     };
 
-    async function askOpenAI(model) {
+    async function ask(model) {
       const r = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -42,30 +34,24 @@ export default async function handler(req) {
       return r;
     }
 
-    // tenta gpt-5; se não tiver acesso, cai para 4o-mini
-    let resp = await askOpenAI("gpt-5-thinking");
+    // tenta gpt-5-thinking; se não der, cai para 4o-mini
+    let resp = await ask("gpt-5-thinking");
     if (resp.status === 404 || resp.status === 400) {
-      resp = await askOpenAI("gpt-4o-mini");
+      console.error("Modelo gpt-5-thinking indisponível. Fazendo fallback para gpt-4o-mini.");
+      resp = await ask("gpt-4o-mini");
     }
 
     if (!resp.ok) {
       const txt = await resp.text();
-      return new Response(JSON.stringify({ error: txt }), {
-        status: resp.status,
-        headers: { "Content-Type": "application/json" }
-      });
+      console.error("OpenAI error:", resp.status, txt);
+      return res.status(resp.status).json({ error: txt });
     }
 
     const data = await resp.json();
     const content = data?.choices?.[0]?.message?.content || "";
-    return new Response(JSON.stringify({ content }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
+    return res.status(200).json({ content });
   } catch (e) {
-    return new Response(JSON.stringify({ error: "server_error" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json" }
-    });
+    console.error("Server error:", e);
+    return res.status(500).json({ error: "server_error" });
   }
 }
